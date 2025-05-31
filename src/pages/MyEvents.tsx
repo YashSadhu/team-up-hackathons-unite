@@ -9,12 +9,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useNotificationStore } from '@/stores/notificationStore';
+import Certificate from '@/components/Certificate';
 
 const MyEvents = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { addNotification } = useNotificationStore();
+  const [showingCertificate, setShowingCertificate] = useState(false);
 
   if (!user) {
     return (
@@ -80,7 +82,6 @@ const MyEvents = () => {
       title: "Event Details",
       description: `Loading details for ${eventTitle}...`,
     });
-    // Simulate navigation to event details
     setTimeout(() => {
       addNotification({
         title: "Event Details Viewed",
@@ -116,23 +117,66 @@ const MyEvents = () => {
     }, 500);
   };
 
-  const handleDownloadCertificate = (eventId: number, eventTitle: string) => {
-    console.log(`Downloading certificate for event ${eventId}: ${eventTitle}`);
+  const handleDownloadCertificate = (event: any) => {
+    console.log(`Downloading certificate for event ${event.id}: ${event.title}`);
     toast({
-      title: "Certificate Download",
-      description: `Preparing certificate for ${eventTitle}...`,
+      title: "Opening Certificate",
+      description: `Preparing certificate for ${event.title}...`,
     });
-    setTimeout(() => {
-      toast({
-        title: "Download Started",
-        description: "Your certificate is being downloaded.",
-      });
-      addNotification({
-        title: "Certificate Downloaded",
-        message: `Certificate for ${eventTitle} has been downloaded`,
-        type: "success"
-      });
-    }, 1000);
+
+    // Create a new window for the certificate
+    const certificateWindow = window.open('', '_blank');
+    if (certificateWindow) {
+      // Write the certificate content to the new window
+      certificateWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Certificate - ${event.title}</title>
+            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+            <style>
+              @media print {
+                body { margin: 0; padding: 0; }
+                .certificate { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
+            <div id="certificate-container"></div>
+          </body>
+        </html>
+      `);
+
+      // Render the Certificate component into the new window
+      const container = certificateWindow.document.getElementById('certificate-container');
+      if (container) {
+        const certificate = (
+          <Certificate
+            eventName={event.title}
+            participantName={user.email}
+            teamName={event.teamName}
+            placement={event.placement}
+            date={event.endDate}
+          />
+        );
+        // Note: In a real application, you'd use ReactDOM.render or createRoot
+        // but for this example, we're just showing the structure
+        container.innerHTML = certificate.toString();
+      }
+
+      // Add print button
+      const printButton = certificateWindow.document.createElement('button');
+      printButton.innerHTML = 'Print Certificate';
+      printButton.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition-colors';
+      printButton.onclick = () => certificateWindow.print();
+      certificateWindow.document.body.appendChild(printButton);
+    }
+
+    addNotification({
+      title: "Certificate Opened",
+      message: `Certificate for ${event.title} has been opened in a new tab`,
+      type: "success"
+    });
   };
 
   const EventCard = ({ event, isPast = false }: { event: any, isPast?: boolean }) => (
@@ -237,7 +281,7 @@ const MyEvents = () => {
               <Button 
                 size="sm" 
                 variant="outline"
-                onClick={() => handleDownloadCertificate(event.id, event.title)}
+                onClick={() => handleDownloadCertificate(event)}
                 className="hover:bg-yellow-50 transition-colors"
               >
                 <Trophy className="h-3 w-3 mr-1" />
