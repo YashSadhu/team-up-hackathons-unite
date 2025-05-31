@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -101,30 +100,42 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
         .select(`
           *,
           hackathons(title, start_date, end_date),
-          profiles!teams_leader_id_fkey(username, full_name, avatar_url),
-          team_members(
-            id,
-            user_id,
-            role,
-            joined_at,
-            profiles(username, full_name, avatar_url, skills)
-          )
+          profiles!teams_leader_id_fkey(username, full_name, avatar_url)
         `)
-        .eq('team_members.user_id', user.id)
+        .in('id', 
+          supabase
+            .from('team_members')
+            .select('team_id')
+            .eq('user_id', user.id)
+        )
         .eq('is_active', true);
 
       if (teamsError) throw teamsError;
+
+      // Get team members separately
+      const teamIds = userTeamsData?.map(team => team.id) || [];
+      const { data: membersData } = await supabase
+        .from('team_members')
+        .select(`
+          id,
+          user_id,
+          team_id,
+          role,
+          joined_at,
+          profiles(username, full_name, avatar_url, skills)
+        `)
+        .in('team_id', teamIds);
 
       // Transform data with correct typing
       const transformedTeams = userTeamsData?.map(team => ({
         ...team,
         hackathon: team.hackathons,
         leader: Array.isArray(team.profiles) ? team.profiles[0] : team.profiles,
-        members: team.team_members?.map((member: any) => ({
+        members: membersData?.filter(member => member.team_id === team.id).map((member: any) => ({
           ...member,
           user: member.profiles
-        })),
-        member_count: team.team_members?.length || 0,
+        })) || [],
+        member_count: membersData?.filter(member => member.team_id === team.id).length || 0,
         is_member: true,
         is_leader: team.leader_id === user.id
       })) || [];
@@ -147,15 +158,7 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
         .select(`
           *,
           hackathons(title, start_date, end_date),
-          profiles!teams_leader_id_fkey(username, full_name, avatar_url),
-          team_members(
-            id,
-            user_id,
-            role,
-            joined_at,
-            profiles(username, full_name, avatar_url, skills)
-          ),
-          team_join_requests!left(id, user_id, status)
+          profiles!teams_leader_id_fkey(username, full_name, avatar_url)
         `)
         .eq('is_active', true)
         .neq('leader_id', user.id);
@@ -167,20 +170,34 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
       const { data: teamsData, error: teamsError } = await query;
       if (teamsError) throw teamsError;
 
+      // Get team members separately
+      const teamIds = teamsData?.map(team => team.id) || [];
+      const { data: membersData } = await supabase
+        .from('team_members')
+        .select('team_id, user_id, profiles(username, full_name, avatar_url, skills)')
+        .in('team_id', teamIds);
+
+      // Get join requests
+      const { data: requestsData } = await supabase
+        .from('team_join_requests')
+        .select('team_id, user_id, status')
+        .in('team_id', teamIds)
+        .eq('user_id', user.id);
+
       // Transform data with correct typing
       const transformedTeams = teamsData?.map(team => ({
         ...team,
         hackathon: team.hackathons,
         leader: Array.isArray(team.profiles) ? team.profiles[0] : team.profiles,
-        members: team.team_members?.map((member: any) => ({
+        members: membersData?.filter(member => member.team_id === team.id).map((member: any) => ({
           ...member,
           user: member.profiles
-        })),
-        member_count: team.team_members?.length || 0,
-        is_member: team.team_members?.some((member: any) => member.user_id === user.id),
+        })) || [],
+        member_count: membersData?.filter(member => member.team_id === team.id).length || 0,
+        is_member: membersData?.some((member: any) => member.team_id === team.id && member.user_id === user.id),
         is_leader: false,
-        has_pending_request: team.team_join_requests?.some(
-          (req: any) => req.user_id === user.id && req.status === 'pending'
+        has_pending_request: requestsData?.some(
+          (req: any) => req.team_id === team.id && req.status === 'pending'
         )
       })) || [];
 
@@ -247,16 +264,23 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
       // Find team by invite code
       const { data: team, error: teamError } = await supabase
         .from('teams')
-        .select('id, max_members, team_members(count)')
+        .select('id, max_members')
         .eq('invite_code', inviteCode)
         .eq('is_active', true)
         .single();
 
       if (teamError) throw new Error('Invalid invite code');
 
+      // Check current member count
+      const { count: memberCount, error: countError } = await supabase
+        .from('team_members')
+        .select('*', { count: 'exact' })
+        .eq('team_id', team.id);
+
+      if (countError) throw countError;
+
       // Check if team is full
-      const memberCount = team.team_members?.[0]?.count || 0;
-      if (memberCount >= team.max_members) {
+      if ((memberCount || 0) >= team.max_members) {
         throw new Error('Team is full');
       }
 
@@ -439,6 +463,7 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
 
       const transformedRequests = requests?.map(request => ({
         ...request,
+        status: request.status as 'pending' | 'accepted' | 'rejected',
         user: request.profiles
       })) || [];
 

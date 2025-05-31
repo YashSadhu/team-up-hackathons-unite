@@ -46,6 +46,7 @@ function App() {
               <Route path="/teams" element={<Teams />} />
               <Route path="/find-team" element={<FindTeam />} />
               <Route path="/hackathon/:id" element={<HackathonDetailsPage />} />
+              <Route path="/hackathons/:id" element={<HackathonDetailsPage />} />
               <Route path="/team/:teamId" element={<TeamPage />} />
               <Route path="/team/:teamId/details" element={<TeamDetails />} />
               <Route path="/team/:teamId/manage" element={<TeamManagement />} />

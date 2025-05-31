@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Navigation from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,12 +12,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useSupabaseTeamStore } from '@/stores/supabaseTeamStore';
 
 const CreateTeam = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { addNotification } = useNotificationStore();
+  const { createTeam } = useSupabaseTeamStore();
   const [teamName, setTeamName] = useState('');
   const [description, setDescription] = useState('');
   const [hackathonId, setHackathonId] = useState('');
@@ -102,37 +103,48 @@ const CreateTeam = () => {
       lookingFor
     });
 
-    const inviteCode = `TEAM${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    const selectedHackathon = hackathons.find(h => h.id === hackathonId);
+    try {
+      const teamData = {
+        name: teamName,
+        description,
+        hackathon_id: hackathonId,
+        max_members: parseInt(maxMembers),
+        tech_stack: techStack,
+        looking_for_skills: lookingFor
+      };
 
-    // Simulate API call
-    setTimeout(() => {
+      const newTeam = await createTeam(teamData);
+      
+      if (newTeam) {
+        const selectedHackathon = hackathons.find(h => h.id === hackathonId);
+        
+        toast({
+          title: "Team Created Successfully!",
+          description: `"${teamName}" has been created.`,
+        });
+
+        addNotification({
+          title: "Team Created",
+          message: `Your team "${teamName}" for ${selectedHackathon?.name} has been created successfully!`,
+          type: "success",
+          data: { teamId: newTeam.id, teamName }
+        });
+
+        // Navigate to team details page
+        navigate(`/team/${newTeam.id}`);
+      } else {
+        throw new Error('Failed to create team');
+      }
+    } catch (error: any) {
+      console.error('Error creating team:', error);
       toast({
-        title: "Team Created Successfully!",
-        description: `"${teamName}" has been created. Invite code: ${inviteCode}`,
+        title: "Error",
+        description: error.message || "Failed to create team. Please try again.",
+        variant: "destructive"
       });
-
-      addNotification({
-        title: "Team Created",
-        message: `Your team "${teamName}" for ${selectedHackathon?.name} has been created successfully!`,
-        type: "success",
-        data: { inviteCode, teamName }
-      });
-
-      // Reset form
-      setTeamName('');
-      setDescription('');
-      setHackathonId('');
-      setMaxMembers('4');
-      setTechStack([]);
-      setLookingFor([]);
+    } finally {
       setIsSubmitting(false);
-
-      // Navigate to find team page after success
-      setTimeout(() => {
-        navigate('/find-team');
-      }, 2000);
-    }, 2000);
+    }
   };
 
   const handleCancel = () => {

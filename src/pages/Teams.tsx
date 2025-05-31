@@ -164,61 +164,18 @@ const Teams = () => {
           </TabsContent>
           
           <TabsContent value="browse-teams" className="space-y-6">
-            {/* Join with Code Section */}
-            <SupabaseJoinTeamWithCode />
-
-            {/* Search and Filter Section */}
-            <div className="mb-8">
-              <div className="flex flex-col md:flex-row gap-4 mb-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search teams by name, description, or hackathon..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select value={hackathonFilter} onValueChange={setHackathonFilter}>
-                  <SelectTrigger className="w-full md:w-64">
-                    <SelectValue placeholder="Filter by hackathon" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Hackathons</SelectItem>
-                    {availableHackathons.map((hackathon) => (
-                      <SelectItem key={hackathon.id} value={hackathon.id}>
-                        {hackathon.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Redirect to Find Team Page */}
+            <div className="text-center py-12">
+              <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">Browse Available Teams</h3>
+              <p className="text-gray-500 mb-4">Discover teams looking for new members and find your perfect match.</p>
+              <Button 
+                onClick={() => navigate('/find-team')}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              >
+                Browse All Teams
+              </Button>
             </div>
-
-            {/* Teams Grid */}
-            {isLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading available teams...</p>
-              </div>
-            ) : filteredTeams.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredTeams.map((team) => (
-                  <SupabaseTeamCard 
-                    key={team.id} 
-                    team={team} 
-                    variant="available"
-                    onJoinRequest={handleJoinRequest}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">No teams found</h3>
-                <p className="text-gray-500">Try adjusting your search criteria or create your own team!</p>
-              </div>
-            )}
           </TabsContent>
         </Tabs>
 
