@@ -1,22 +1,310 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import Navigation from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Users, MapPin, Clock, Trophy, Code, ExternalLink, Settings } from 'lucide-react';
+import { Calendar, Users, MapPin, Clock, Trophy, Code, ExternalLink, Settings, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useSupabaseTeamStore } from '@/stores/supabaseTeamStore';
+import { supabase } from '@/integrations/supabase/client';
 import Certificate from '@/components/Certificate';
+
+interface Hackathon {
+  id: string;
+  title: string;
+  start_date: string;
+  end_date: string;
+  location: string;
+  image_url?: string;
+  registration_status?: string;
+  team?: any;
+}
 
 const MyEvents = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { addNotification } = useNotificationStore();
-  const [showingCertificate, setShowingCertificate] = useState(false);
+  const { userTeams, fetchUserTeams } = useSupabaseTeamStore();
+  const [registeredHackathons, setRegisteredHackathons] = useState<Hackathon[]>([]);
+  const [pastHackathons, setPastHackathons] = useState<Hackathon[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchRegisteredHackathons();
+      fetchUserTeams();
+    }
+  }, [user, fetchUserTeams]);
+
+  useEffect(() => {
+    // Update hackathons with team information when userTeams changes
+    if (userTeams.length > 0) {
+      updateHackathonsWithTeams();
+    }
+  }, [userTeams]);
+
+  const fetchRegisteredHackathons = async () => {
+    try {
+      setIsLoading(true);
+      const { data: registrations, error } = await supabase
+        .from('registrations')
+        .select(`
+          *,
+          hackathons(*)
+        `)
+        .eq('user_id', user?.id)
+        .eq('status', 'confirmed');
+
+      if (error) throw error;
+
+      const hackathons = registrations?.map(reg => reg.hackathons).filter(Boolean) || [];
+      
+      // Separate current and past hackathons
+      const now = new Date();
+      const current = hackathons.filter(h => new Date(h.end_date) >= now);
+      const past = hackathons.filter(h => new Date(h.end_date) < now);
+      
+      setRegisteredHackathons(current);
+      setPastHackathons(past);
+    } catch (error: any) {
+      console.error('Error fetching hackathons:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch your registered hackathons",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateHackathonsWithTeams = () => {
+    // Update current hackathons with team info
+    setRegisteredHackathons(prev => prev.map(hackathon => {
+      const team = userTeams.find(t => t.hackathon_id === hackathon.id);
+      return { ...hackathon, team };
+    }));
+
+    // Update past hackathons with team info
+    setPastHackathons(prev => prev.map(hackathon => {
+      const team = userTeams.find(t => t.hackathon_id === hackathon.id);
+      return { ...hackathon, team };
+    }));
+  };
+
+  const handleViewDetails = (hackathon: Hackathon) => {
+    console.log(`Viewing details for hackathon ${hackathon.id}: ${hackathon.title}`);
+    navigate(`/hackathon/${hackathon.id}`);
+  };
+
+  const handleManageTeam = (hackathon: Hackathon) => {
+    if (hackathon.team) {
+      console.log(`Managing team for hackathon ${hackathon.id}: ${hackathon.team.name}`);
+      navigate(`/team/${hackathon.team.id}`);
+    }
+  };
+
+  const handleCreateTeam = (hackathon: Hackathon) => {
+    console.log(`Creating team for hackathon ${hackathon.id}: ${hackathon.title}`);
+    navigate(`/create-team?hackathon=${hackathon.id}`);
+  };
+
+  const handleJoinTeam = (hackathon: Hackathon) => {
+    console.log(`Looking for teams for hackathon ${hackathon.id}: ${hackathon.title}`);
+    navigate(`/teams?tab=browse-teams&hackathon=${hackathon.id}`);
+  };
+
+  const handleViewProject = (hackathon: Hackathon) => {
+    console.log(`Viewing project for hackathon ${hackathon.id}`);
+    if (hackathon.team?.project_ideas?.[0]) {
+      navigate(`/project/${hackathon.team.project_ideas[0].id}`);
+    } else {
+      toast({
+        title: "No Project Found",
+        description: "No project has been submitted for this hackathon yet.",
+      });
+    }
+  };
+
+  const handleDownloadCertificate = (hackathon: Hackathon) => {
+    console.log(`Downloading certificate for hackathon ${hackathon.id}: ${hackathon.title}`);
+    toast({
+      title: "Opening Certificate",
+      description: `Preparing certificate for ${hackathon.title}...`,
+    });
+
+    // Create a new window for the certificate
+    const certificateWindow = window.open('', '_blank');
+    if (certificateWindow) {
+      certificateWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Certificate - ${hackathon.title}</title>
+            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+            <style>
+              @media print {
+                body { margin: 0; padding: 0; }
+                .certificate { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
+            <div id="certificate-container"></div>
+          </body>
+        </html>
+      `);
+
+      // Add print button
+      const printButton = certificateWindow.document.createElement('button');
+      printButton.innerHTML = 'Print Certificate';
+      printButton.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition-colors';
+      printButton.onclick = () => certificateWindow.print();
+      certificateWindow.document.body.appendChild(printButton);
+    }
+
+    addNotification({
+      title: "Certificate Opened",
+      message: `Certificate for ${hackathon.title} has been opened in a new tab`,
+      type: "success"
+    });
+  };
+
+  const HackathonCard = ({ hackathon, isPast = false }: { hackathon: Hackathon, isPast?: boolean }) => (
+    <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <CardTitle className="text-xl mb-2">{hackathon.title}</CardTitle>
+            <div className="flex items-center text-sm text-gray-600 mb-2">
+              <Calendar className="h-4 w-4 mr-1" />
+              {hackathon.start_date} - {hackathon.end_date}
+            </div>
+            <div className="flex items-center text-sm text-gray-600">
+              <MapPin className="h-4 w-4 mr-1" />
+              {hackathon.location}
+            </div>
+          </div>
+          <Badge
+            variant={
+              isPast ? 'outline' : 'default'
+            }
+          >
+            {isPast ? 'Completed' : 'Registered'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {/* Team Status */}
+        <div className="space-y-3 mb-4">
+          {hackathon.team ? (
+            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="h-4 w-4 text-green-600" />
+                <span className="font-medium text-green-800">{hackathon.team.name}</span>
+                {hackathon.team.is_leader && (
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">Leader</Badge>
+                )}
+              </div>
+              <div className="text-sm text-green-700">
+                {hackathon.team.member_count}/{hackathon.team.max_members} members
+              </div>
+            </div>
+          ) : !isPast && (
+            <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="h-4 w-4 text-amber-600" />
+                <span className="font-medium text-amber-800">No Team Yet</span>
+              </div>
+              <div className="text-sm text-amber-700">
+                You haven't joined or created a team for this hackathon
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex gap-2 mt-4">
+          <Button 
+            size="sm" 
+            variant="outline"
+            onClick={() => handleViewDetails(hackathon)}
+            className="hover:bg-blue-50 transition-colors"
+          >
+            <ExternalLink className="h-3 w-3 mr-1" />
+            View Details
+          </Button>
+
+          {!isPast && (
+            <>
+              {hackathon.team ? (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => handleManageTeam(hackathon)}
+                  className="hover:bg-purple-50 transition-colors"
+                >
+                  <Settings className="h-3 w-3 mr-1" />
+                  {hackathon.team.is_leader ? 'Manage Team' : 'View Team'}
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleCreateTeam(hackathon)}
+                    className="hover:bg-green-50 transition-colors"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Create Team
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleJoinTeam(hackathon)}
+                    className="hover:bg-blue-50 transition-colors"
+                  >
+                    <Users className="h-3 w-3 mr-1" />
+                    Find Team
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+
+          {isPast && (
+            <>
+              {hackathon.team && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => handleViewProject(hackathon)}
+                  className="hover:bg-green-50 transition-colors"
+                >
+                  <Code className="h-3 w-3 mr-1" />
+                  View Project
+                </Button>
+              )}
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => handleDownloadCertificate(hackathon)}
+                className="hover:bg-yellow-50 transition-colors"
+              >
+                <Trophy className="h-3 w-3 mr-1" />
+                Certificate
+              </Button>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   if (!user) {
     return (
@@ -36,263 +324,6 @@ const MyEvents = () => {
       </div>
     );
   }
-
-  const registeredEvents = [
-    {
-      id: 1,
-      title: "AI Innovation Challenge 2024",
-      status: "upcoming",
-      startDate: "2024-07-15",
-      endDate: "2024-07-17",
-      location: "San Francisco, CA",
-      registrationDate: "2024-06-20",
-      teamStatus: "joined",
-      teamName: "AI Innovators"
-    },
-    {
-      id: 2,
-      title: "Web3 Future Builder",
-      status: "active",
-      startDate: "2024-08-01",
-      endDate: "2024-08-03",
-      location: "Austin, TX",
-      registrationDate: "2024-07-10",
-      teamStatus: "leader",
-      teamName: "Web3 Builders"
-    }
-  ];
-
-  const pastEvents = [
-    {
-      id: 3,
-      title: "Spring Code Jam 2024",
-      status: "completed",
-      startDate: "2024-04-15",
-      endDate: "2024-04-17",
-      location: "Boston, MA",
-      placement: "2nd Place",
-      teamName: "Code Warriors",
-      projectTitle: "Smart Campus Navigator"
-    }
-  ];
-
-  const handleViewDetails = (eventId: number, eventTitle: string) => {
-    console.log(`Viewing details for event ${eventId}: ${eventTitle}`);
-    toast({
-      title: "Event Details",
-      description: `Loading details for ${eventTitle}...`,
-    });
-    setTimeout(() => {
-      addNotification({
-        title: "Event Details Viewed",
-        message: `You viewed details for ${eventTitle}`,
-        type: "info"
-      });
-    }, 500);
-  };
-
-  const handleManageTeam = (eventId: number, teamName: string) => {
-    console.log(`Managing team for event ${eventId}: ${teamName}`);
-    toast({
-      title: "Team Management",
-      description: `Opening team management for ${teamName}...`,
-    });
-    setTimeout(() => {
-      addNotification({
-        title: "Team Management",
-        message: `You accessed team management for ${teamName}`,
-        type: "info"
-      });
-    }, 500);
-  };
-
-  const handleViewProject = (eventId: number, projectTitle: string | undefined) => {
-    console.log(`Viewing project for event ${eventId}: ${projectTitle}`);
-    toast({
-      title: "Project Showcase",
-      description: `Opening project: ${projectTitle || 'Untitled Project'}...`,
-    });
-    setTimeout(() => {
-      window.open('#', '_blank');
-    }, 500);
-  };
-
-  const handleDownloadCertificate = (event: any) => {
-    console.log(`Downloading certificate for event ${event.id}: ${event.title}`);
-    toast({
-      title: "Opening Certificate",
-      description: `Preparing certificate for ${event.title}...`,
-    });
-
-    // Create a new window for the certificate
-    const certificateWindow = window.open('', '_blank');
-    if (certificateWindow) {
-      // Write the certificate content to the new window
-      certificateWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Certificate - ${event.title}</title>
-            <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-            <style>
-              @media print {
-                body { margin: 0; padding: 0; }
-                .certificate { page-break-inside: avoid; }
-              }
-            </style>
-          </head>
-          <body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
-            <div id="certificate-container"></div>
-          </body>
-        </html>
-      `);
-
-      // Render the Certificate component into the new window
-      const container = certificateWindow.document.getElementById('certificate-container');
-      if (container) {
-        const certificate = (
-          <Certificate
-            eventName={event.title}
-            participantName={user.email}
-            teamName={event.teamName}
-            placement={event.placement}
-            date={event.endDate}
-          />
-        );
-        // Note: In a real application, you'd use ReactDOM.render or createRoot
-        // but for this example, we're just showing the structure
-        container.innerHTML = certificate.toString();
-      }
-
-      // Add print button
-      const printButton = certificateWindow.document.createElement('button');
-      printButton.innerHTML = 'Print Certificate';
-      printButton.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition-colors';
-      printButton.onclick = () => certificateWindow.print();
-      certificateWindow.document.body.appendChild(printButton);
-    }
-
-    addNotification({
-      title: "Certificate Opened",
-      message: `Certificate for ${event.title} has been opened in a new tab`,
-      type: "success"
-    });
-  };
-
-  const EventCard = ({ event, isPast = false }: { event: any, isPast?: boolean }) => (
-    <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-xl mb-2">{event.title}</CardTitle>
-            <div className="flex items-center text-sm text-gray-600 mb-2">
-              <Calendar className="h-4 w-4 mr-1" />
-              {event.startDate} - {event.endDate}
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <MapPin className="h-4 w-4 mr-1" />
-              {event.location}
-            </div>
-          </div>
-          <Badge
-            variant={
-              event.status === 'active' ? 'default' :
-              event.status === 'upcoming' ? 'secondary' : 'outline'
-            }
-          >
-            {event.status}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isPast ? (
-          <div className="space-y-3">
-            {event.placement && (
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-600" />
-                <span className="font-semibold text-yellow-700">{event.placement}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-600" />
-              <span className="text-sm">Team: {event.teamName}</span>
-            </div>
-            {event.projectTitle && (
-              <div className="flex items-center gap-2">
-                <Code className="h-4 w-4 text-gray-600" />
-                <span className="text-sm">Project: {event.projectTitle}</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-gray-600" />
-              <span className="text-sm">Registered: {event.registrationDate}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-600" />
-              <span className="text-sm">
-                Team: {event.teamName} 
-                {event.teamStatus === 'leader' && (
-                  <Badge variant="outline" className="ml-2 text-xs">Leader</Badge>
-                )}
-              </span>
-            </div>
-          </div>
-        )}
-        
-        <div className="flex gap-2 mt-4">
-          {!isPast && (
-            <>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => handleViewDetails(event.id, event.title)}
-                className="hover:bg-blue-50 transition-colors"
-              >
-                <ExternalLink className="h-3 w-3 mr-1" />
-                View Details
-              </Button>
-              {event.teamStatus === 'leader' && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => handleManageTeam(event.id, event.teamName)}
-                  className="hover:bg-purple-50 transition-colors"
-                >
-                  <Settings className="h-3 w-3 mr-1" />
-                  Manage Team
-                </Button>
-              )}
-            </>
-          )}
-          {isPast && (
-            <>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => handleViewProject(event.id, event.projectTitle)}
-                className="hover:bg-green-50 transition-colors"
-              >
-                <Code className="h-3 w-3 mr-1" />
-                View Project
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => handleDownloadCertificate(event)}
-                className="hover:bg-yellow-50 transition-colors"
-              >
-                <Trophy className="h-3 w-3 mr-1" />
-                Certificate
-              </Button>
-            </>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
@@ -315,10 +346,15 @@ const MyEvents = () => {
           </TabsList>
           
           <TabsContent value="current" className="space-y-6">
-            {registeredEvents.length > 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading your events...</p>
+              </div>
+            ) : registeredHackathons.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {registeredEvents.map((event) => (
-                  <EventCard key={event.id} event={event} />
+                {registeredHackathons.map((hackathon) => (
+                  <HackathonCard key={hackathon.id} hackathon={hackathon} />
                 ))}
               </div>
             ) : (
@@ -337,10 +373,15 @@ const MyEvents = () => {
           </TabsContent>
           
           <TabsContent value="past" className="space-y-6">
-            {pastEvents.length > 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading past events...</p>
+              </div>
+            ) : pastHackathons.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {pastEvents.map((event) => (
-                  <EventCard key={event.id} event={event} isPast />
+                {pastHackathons.map((hackathon) => (
+                  <HackathonCard key={hackathon.id} hackathon={hackathon} isPast />
                 ))}
               </div>
             ) : (
@@ -351,14 +392,14 @@ const MyEvents = () => {
               </div>
             )}
           </TabsContent>
-        </Tabs>
+        </tabs>
 
         {/* Quick Stats */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="text-center bg-white/80 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="text-3xl font-bold text-purple-600 mb-2">
-                {registeredEvents.length + pastEvents.length}
+                {registeredHackathons.length + pastHackathons.length}
               </div>
               <div className="text-sm text-gray-600">Total Events</div>
             </CardContent>
@@ -366,7 +407,7 @@ const MyEvents = () => {
           <Card className="text-center bg-white/80 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="text-3xl font-bold text-blue-600 mb-2">
-                {registeredEvents.length}
+                {registeredHackathons.length}
               </div>
               <div className="text-sm text-gray-600">Active Registrations</div>
             </CardContent>
@@ -374,15 +415,15 @@ const MyEvents = () => {
           <Card className="text-center bg-white/80 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="text-3xl font-bold text-green-600 mb-2">
-                {pastEvents.filter(e => e.placement).length}
+                {userTeams.length}
               </div>
-              <div className="text-sm text-gray-600">Awards Won</div>
+              <div className="text-sm text-gray-600">Teams Joined</div>
             </CardContent>
           </Card>
           <Card className="text-center bg-white/80 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="text-3xl font-bold text-indigo-600 mb-2">
-                {registeredEvents.filter(e => e.teamStatus === 'leader').length}
+                {userTeams.filter(team => team.is_leader).length}
               </div>
               <div className="text-sm text-gray-600">Teams Led</div>
             </CardContent>

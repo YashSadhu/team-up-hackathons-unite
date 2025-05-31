@@ -278,6 +278,51 @@ export type Database = {
           },
         ]
       }
+      team_join_requests: {
+        Row: {
+          created_at: string | null
+          id: string
+          message: string | null
+          status: string | null
+          team_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          status?: string | null
+          team_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message?: string | null
+          status?: string | null
+          team_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_join_requests_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_join_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
           id: string
@@ -317,6 +362,7 @@ export type Database = {
           hackathon_id: string | null
           id: string
           invite_code: string | null
+          is_active: boolean | null
           leader_id: string | null
           looking_for_skills: string[] | null
           max_members: number | null
@@ -330,6 +376,7 @@ export type Database = {
           hackathon_id?: string | null
           id?: string
           invite_code?: string | null
+          is_active?: boolean | null
           leader_id?: string | null
           looking_for_skills?: string[] | null
           max_members?: number | null
@@ -343,6 +390,7 @@ export type Database = {
           hackathon_id?: string | null
           id?: string
           invite_code?: string | null
+          is_active?: boolean | null
           leader_id?: string | null
           looking_for_skills?: string[] | null
           max_members?: number | null

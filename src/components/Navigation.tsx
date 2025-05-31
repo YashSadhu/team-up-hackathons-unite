@@ -1,166 +1,214 @@
+
 import React, { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Users, Calendar, Bell, LogOut, User, Bookmark } from "lucide-react";
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Menu, Bell, User, Calendar, Users, Trophy, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import HackMapLogo from './HackMapLogo';
-import { Badge } from '@/components/ui/badge';
 import { useNotificationStore } from '@/stores/notificationStore';
-import NotificationPanel from './NotificationPanel';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useHackathonStore } from '@/stores/hackathonStore';
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import NotificationPanel from './NotificationPanel';
+import HackMapLogo from './HackMapLogo';
 
 const Navigation = () => {
   const { user, signOut } = useAuth();
-  const { unreadCount } = useNotificationStore();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const { savedHackathons } = useHackathonStore();
+  const location = useLocation();
   const navigate = useNavigate();
+  const { notifications } = useNotificationStore();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/auth');
+    navigate('/');
   };
 
-  const toggleNotifications = () => {
-    setShowNotifications(!showNotifications);
-  };
+  const navItems = [
+    { name: 'Hackathons', href: '/', icon: Calendar },
+    { name: 'Teams', href: '/teams', icon: Users },
+    { name: 'My Events', href: '/my-events', icon: Trophy },
+    { name: 'Projects', href: '/projects', icon: Settings },
+  ];
 
-  // Define navigation items based on auth status
-  const getNavigationItems = () => {
-    const baseItems = [
-      {
-        label: 'Dashboard',
-        path: '/dashboard',
-        show: true
-      }
-    ];
-
-    const authenticatedItems = [
-      {
-        label: 'My Events',
-        path: '/my-events',
-        show: true
-      },
-      {
-        label: 'Teams',
-        path: '/find-team',
-        show: true
-      },
-      {
-        label: 'Projects',
-        path: '/projects',
-        show: true
-      }
-    ];
-
-    return [...baseItems, ...(user ? authenticatedItems : [])];
+  const isActivePath = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname.startsWith(path);
   };
 
   return (
-    <>
-      <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
+    <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <Link to="/" className="flex items-center space-x-2">
             <HackMapLogo />
+          </Link>
 
-            {/* Navigation Links */}
-            <div className="hidden md:flex items-center space-x-8">
-              {getNavigationItems().map((item) => (
-                item.show && (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className="text-gray-700 hover:text-purple-600 transition-colors font-medium"
-                  >
-                    {item.label}
-                  </Link>
-                )
-              ))}
-            </div>
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center space-x-8">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActivePath(item.href)
+                      ? 'text-purple-600 bg-purple-50'
+                      : 'text-gray-600 hover:text-purple-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
 
-            {/* Auth Section */}
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <>
+          {/* User Actions */}
+          <div className="flex items-center space-x-4">
+            {user ? (
+              <>
+                {/* Notifications */}
+                <div className="relative">
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="sm"
+                    onClick={() => setShowNotifications(!showNotifications)}
                     className="relative"
-                    onClick={() => navigate('/saved-hackathons')}
                   >
-                    <Bookmark className="h-5 w-5" />
-                    {savedHackathons.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {savedHackathons.length}
-                      </span>
-                    )}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="hidden md:flex relative"
-                    onClick={toggleNotifications}
-                  >
-                    <Bell className="h-4 w-4 mr-2" />
-                    Notifications
+                    <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
                       <Badge 
                         variant="destructive" 
-                        className="absolute -top-1 -right-1 h-5 w-5 text-xs p-0 flex items-center justify-center"
+                        className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
                       >
                         {unreadCount}
                       </Badge>
                     )}
                   </Button>
-                  
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                        <User className="h-4 w-4" />
-                        <span className="hidden md:inline">{user.email}</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => navigate('/profile')}>
-                        <User className="h-4 w-4 mr-2" />
-                        Profile
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleSignOut}>
-                        <LogOut className="h-4 w-4 mr-2" />
-                        Sign Out
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              ) : (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/auth')}>
-                    Sign In
+                  {showNotifications && (
+                    <NotificationPanel onClose={() => setShowNotifications(false)} />
+                  )}
+                </div>
+
+                {/* User Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email} />
+                        <AvatarFallback>
+                          {user.email?.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">{user.email}</p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {user.user_metadata?.full_name || 'User'}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/profile')}>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      <span>Dashboard</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/saved-hackathons')}>
+                      <Trophy className="mr-2 h-4 w-4" />
+                      <span>Saved</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Button variant="ghost" asChild>
+                  <Link to="/auth">Sign In</Link>
+                </Button>
+                <Button asChild>
+                  <Link to="/auth">Get Started</Link>
+                </Button>
+              </div>
+            )}
+
+            {/* Mobile Menu */}
+            <div className="md:hidden">
+              <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Menu className="h-5 w-5" />
                   </Button>
-                  <Button size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700" onClick={() => navigate('/auth')}>
-                    Sign Up
-                  </Button>
-                </>
-              )}
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80">
+                  <div className="flex flex-col space-y-4 mt-8">
+                    {navItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.name}
+                          to={item.href}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={`flex items-center space-x-3 px-3 py-3 rounded-md text-base font-medium transition-colors ${
+                            isActivePath(item.href)
+                              ? 'text-purple-600 bg-purple-50'
+                              : 'text-gray-600 hover:text-purple-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" />
+                          <span>{item.name}</span>
+                        </Link>
+                      );
+                    })}
+                    
+                    {!user && (
+                      <div className="border-t pt-4 space-y-2">
+                        <Button variant="ghost" className="w-full justify-start" asChild>
+                          <Link to="/auth" onClick={() => setIsMobileMenuOpen(false)}>
+                            Sign In
+                          </Link>
+                        </Button>
+                        <Button className="w-full" asChild>
+                          <Link to="/auth" onClick={() => setIsMobileMenuOpen(false)}>
+                            Get Started
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
         </div>
-      </nav>
-      
-      <NotificationPanel 
-        isOpen={showNotifications} 
-        onClose={() => setShowNotifications(false)} 
-      />
-    </>
+      </div>
+    </nav>
   );
 };
 
