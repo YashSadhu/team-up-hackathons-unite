@@ -392,7 +392,7 @@ const MyEvents = () => {
               </div>
             )}
           </TabsContent>
-        </tabs>
+        </Tabs>
 
         {/* Quick Stats */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
