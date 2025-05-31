@@ -31,7 +31,7 @@ const NotificationPanel = ({ isOpen, onClose }: NotificationPanelProps) => {
       case 'error':
         return '❌';
       case 'deadline':
-        return '⏰'; // Or another suitable icon like 📅 or 🚨
+        return '⏰';
       default:
         return 'ℹ️';
     }

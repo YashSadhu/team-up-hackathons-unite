@@ -100,9 +100,10 @@ const Navigation = () => {
                       </Badge>
                     )}
                   </Button>
-                  {showNotifications && (
-                    <NotificationPanel onClose={() => setShowNotifications(false)} />
-                  )}
+                  <NotificationPanel 
+                    isOpen={showNotifications} 
+                    onClose={() => setShowNotifications(false)} 
+                  />
                 </div>
 
                 {/* User Menu */}

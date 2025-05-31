@@ -1,7 +1,6 @@
 
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 
 interface Team {
   id: string;
@@ -116,11 +115,11 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
 
       if (teamsError) throw teamsError;
 
-      // Transform data
+      // Transform data with correct typing
       const transformedTeams = userTeamsData?.map(team => ({
         ...team,
         hackathon: team.hackathons,
-        leader: team.profiles,
+        leader: Array.isArray(team.profiles) ? team.profiles[0] : team.profiles,
         members: team.team_members?.map((member: any) => ({
           ...member,
           user: member.profiles
@@ -132,6 +131,7 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
 
       set({ userTeams: transformedTeams, isLoading: false });
     } catch (error: any) {
+      console.error('Error in fetchUserTeams:', error);
       set({ error: error.message, isLoading: false });
     }
   },
@@ -167,11 +167,11 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
       const { data: teamsData, error: teamsError } = await query;
       if (teamsError) throw teamsError;
 
-      // Transform data
+      // Transform data with correct typing
       const transformedTeams = teamsData?.map(team => ({
         ...team,
         hackathon: team.hackathons,
-        leader: team.profiles,
+        leader: Array.isArray(team.profiles) ? team.profiles[0] : team.profiles,
         members: team.team_members?.map((member: any) => ({
           ...member,
           user: member.profiles
@@ -186,6 +186,7 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
 
       set({ teams: transformedTeams, isLoading: false });
     } catch (error: any) {
+      console.error('Error in fetchAvailableTeams:', error);
       set({ error: error.message, isLoading: false });
     }
   },
@@ -196,12 +197,20 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
+      // Only include the fields that exist in the database table
+      const teamToInsert = {
+        name: teamData.name!,
+        description: teamData.description,
+        hackathon_id: teamData.hackathon_id,
+        tech_stack: teamData.tech_stack,
+        looking_for_skills: teamData.looking_for_skills,
+        max_members: teamData.max_members || 4,
+        leader_id: user.id
+      };
+
       const { data: newTeam, error: teamError } = await supabase
         .from('teams')
-        .insert({
-          ...teamData,
-          leader_id: user.id
-        })
+        .insert(teamToInsert)
         .select()
         .single();
 
@@ -223,6 +232,7 @@ export const useSupabaseTeamStore = create<SupabaseTeamStore>((set, get) => ({
       set({ isLoading: false });
       return newTeam;
     } catch (error: any) {
+      console.error('Error in createTeam:', error);
       set({ error: error.message, isLoading: false });
       return null;
     }
