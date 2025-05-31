@@ -1,13 +1,13 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, MapPin, Crown } from 'lucide-react';
+import { Users, MapPin, Crown, Copy, Share2 } from 'lucide-react';
 import { Team } from '@/types/teamTypes';
 import SkillMatchIndicator from './SkillMatchIndicator';
-import InviteCodeGenerator from './InviteCodeGenerator';
 import { useTeamStore } from '@/stores/teamStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/components/ui/use-toast';
@@ -20,12 +20,14 @@ interface TeamCardProps {
 
 const TeamCard = ({ team, variant = 'available', onJoinRequest }: TeamCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { joinTeam, isLoading, sentRequests } = useTeamStore();
+  const { joinTeam, isLoading, sentRequests, isTeamMember } = useTeamStore();
   const { user } = useAuth();
   const navigate = useNavigate();
   
   const isRequestSent = sentRequests.includes(team.id);
   const isLoadingRequest = isLoading && sentRequests.includes(team.id);
+  const currentUserId = 'current-user-123'; // Mock current user ID
+  const userIsTeamMember = isTeamMember(team.id, currentUserId);
 
   const handleJoinRequest = async () => {
     if (onJoinRequest) {
@@ -37,6 +39,53 @@ const TeamCard = ({ team, variant = 'available', onJoinRequest }: TeamCardProps)
 
   const handleViewTeam = () => {
     navigate(`/team/${team.id}`);
+  };
+
+  const handleCopyInviteCode = async () => {
+    if (!team.inviteCode) return;
+    
+    try {
+      await navigator.clipboard.writeText(team.inviteCode);
+      toast({
+        title: "Copied!",
+        description: "Team invite code copied to clipboard",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy invite code to clipboard",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleShareInviteCode = async () => {
+    if (!team.inviteCode) return;
+    
+    const shareText = `Join my team "${team.name}" for ${team.hackathonName}! Use invite code: ${team.inviteCode}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${team.name}`,
+          text: shareText,
+        });
+      } catch (err) {
+        // User cancelled sharing, copy to clipboard instead
+        await navigator.clipboard.writeText(shareText);
+        toast({
+          title: "Copied!",
+          description: "Team invite message copied to clipboard",
+        });
+      }
+    } else {
+      // Fallback to copying
+      await navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied!",
+        description: "Team invite message copied to clipboard",
+      });
+    }
   };
 
   const getStatusColor = (status?: string) => {
@@ -165,29 +214,32 @@ const TeamCard = ({ team, variant = 'available', onJoinRequest }: TeamCardProps)
           </div>
         </div>
 
-        {/* Invite Code (for owned teams) */}
-        {variant === 'my-team' && team.isOwner && team.inviteCode && (
+        {/* Invite Code (only visible to team members) */}
+        {userIsTeamMember && team.inviteCode && (
           <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
             <h4 className="text-sm font-medium text-purple-700 mb-2">Team Invite Code</h4>
             <div className="flex items-center gap-2">
-              <code className="text-sm font-mono bg-white px-2 py-1 rounded border border-purple-200">
+              <code className="text-sm font-mono bg-white px-2 py-1 rounded border border-purple-200 flex-1">
                 {team.inviteCode}
               </code>
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-purple-600 hover:text-purple-700"
-                onClick={() => {
-                  navigator.clipboard.writeText(team.inviteCode);
-                  toast({
-                    title: "Copied!",
-                    description: "Team code copied to clipboard",
-                  });
-                }}
+                className="text-purple-600 hover:text-purple-700 px-2"
+                onClick={handleCopyInviteCode}
               >
-                Copy
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-purple-600 hover:text-purple-700 px-2"
+                onClick={handleShareInviteCode}
+              >
+                <Share2 className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-xs text-purple-600 mt-1">Share this code with others to invite them to your team</p>
           </div>
         )}
 
