@@ -191,8 +191,8 @@ const ProjectIdeas = () => {
       const comment = await addComment(selectedIdeaId, {
         ideaId: selectedIdeaId,
         userId: user?.id || 'anonymous',
-        userName: user?.displayName || 'Anonymous',
-        userAvatar: user?.photoURL,
+        userName: user?.email?.split('@')[0] || 'Anonymous',
+        userAvatar: `https://ui-avatars.com/api/?name=${user?.email?.split('@')[0] || 'Anonymous'}`,
         content: newComment.trim(),
       });
       
@@ -256,7 +256,7 @@ const ProjectIdeas = () => {
         description: newIdeaDescription.trim(),
         category: newIdeaCategory.trim(),
         techTags: newIdeaTechTags,
-        createdBy: user?.displayName || 'Anonymous',
+        createdBy: user?.email?.split('@')[0] || 'Anonymous',
       });
       
       // Add to local state
